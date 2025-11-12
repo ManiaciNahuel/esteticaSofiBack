@@ -7,6 +7,9 @@ import appointmentsRouter from './routes/appointments.js';
 import paymentsRouter from './routes/payments.js';
 import cashRouter from './routes/cash.js';
 
+// Configurar zona horaria
+process.env.TZ = 'America/Argentina/Buenos_Aires';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
