@@ -30,6 +30,38 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * 🔍 Buscar turnos por nombre de cliente
+ * GET /api/appointments/search?client=nombre
+ */
+router.get("/search", async (req, res) => {
+    const { client } = req.query;
+
+    if (!client || client.trim() === "") {
+        return res.status(400).json({ error: "Debe proporcionar un nombre de cliente" });
+    }
+
+    try {
+        const query = `
+            SELECT a.*, e.name AS employee_name, e.color AS employee_color, 
+                   s.name AS service_name, c.full_name AS client_name
+            FROM appointments a
+            LEFT JOIN employees e ON a.employee_id = e.id
+            LEFT JOIN services s ON a.service_id = s.id
+            LEFT JOIN clients c ON a.client_id = c.id
+            WHERE LOWER(c.full_name) LIKE LOWER($1)
+            ORDER BY a.starts_at DESC
+        `;
+
+        const searchTerm = `%${client.trim()}%`;
+        const { rows } = await pool.query(query, [searchTerm]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Error al buscar turnos por cliente:", err);
+        res.status(500).json({ error: "Error al buscar turnos" });
+    }
+});
+
+/**
  * ➕ Crear un nuevo turno
  */
 router.post("/", async (req, res) => {
