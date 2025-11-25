@@ -30,38 +30,6 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * 🔍 Buscar turnos por nombre de cliente
- * GET /api/appointments/search?client=nombre
- */
-router.get("/search", async (req, res) => {
-    const { client } = req.query;
-
-    if (!client || client.trim() === "") {
-        return res.status(400).json({ error: "Debe proporcionar un nombre de cliente" });
-    }
-
-    try {
-        const query = `
-            SELECT a.*, e.name AS employee_name, e.color AS employee_color, 
-                   s.name AS service_name, c.full_name AS client_name
-            FROM appointments a
-            LEFT JOIN employees e ON a.employee_id = e.id
-            LEFT JOIN services s ON a.service_id = s.id
-            LEFT JOIN clients c ON a.client_id = c.id
-            WHERE LOWER(c.full_name) LIKE LOWER($1)
-            ORDER BY a.starts_at DESC
-        `;
-
-        const searchTerm = `%${client.trim()}%`;
-        const { rows } = await pool.query(query, [searchTerm]);
-        res.json(rows);
-    } catch (err) {
-        console.error("Error al buscar turnos por cliente:", err);
-        res.status(500).json({ error: "Error al buscar turnos" });
-    }
-});
-
-/**
  * ➕ Crear un nuevo turno
  */
 router.post("/", async (req, res) => {
@@ -119,37 +87,89 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * ✏️ Actualizar turno (estado, observaciones, fechas, etc.)
+ * ✏️ Actualizar turno completo (empleado, cliente, servicio, fechas, etc.)
  */
 router.patch("/:id", async (req, res) => {
     const { id } = req.params;
-    const { status, notes, final_price, final_duration_minutes, starts_at, ends_at } = req.body;
+    const {
+        employee_id,
+        client,
+        service_id,
+        final_price,
+        final_duration_minutes,
+        notes,
+        starts_at,
+        ends_at,
+        status
+    } = req.body;
 
     try {
-        const query = `
-      UPDATE appointments
-      SET status = COALESCE($1, status),
-          notes = COALESCE($2, notes),
-          final_price = COALESCE($3, final_price),
-          final_duration_minutes = COALESCE($4, final_duration_minutes),
-          starts_at = COALESCE($5, starts_at),
-          ends_at = COALESCE($6, ends_at),
-          updated_at = NOW()
-      WHERE id = $7
-      RETURNING *;
-    `;
-        const { rows } = await pool.query(query, [
-            status,
-            notes,
+        // 1️⃣ Manejar cliente si se proporciona
+        let client_id = null;
+        if (client && client.full_name) {
+            const clientName = client.full_name;
+            const clientPhone = client.phone || null;
+            
+            const clientResult = await pool.query(
+                `INSERT INTO clients (full_name, phone)
+                 VALUES ($1, $2)
+                 ON CONFLICT (full_name) DO UPDATE SET 
+                    phone = EXCLUDED.phone,
+                    updated_at = CURRENT_TIMESTAMP
+                 RETURNING id`,
+                [clientName, clientPhone]
+            );
+            client_id = clientResult.rows[0].id;
+        }
+
+        // 2️⃣ Actualizar el turno
+        const updateQuery = `
+            UPDATE appointments
+            SET employee_id = COALESCE($1, employee_id),
+                client_id = COALESCE($2, client_id),
+                service_id = COALESCE($3, service_id),
+                final_price = COALESCE($4, final_price),
+                final_duration_minutes = COALESCE($5, final_duration_minutes),
+                notes = COALESCE($6, notes),
+                starts_at = COALESCE($7, starts_at),
+                ends_at = COALESCE($8, ends_at),
+                status = COALESCE($9, status),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $10
+            RETURNING *;
+        `;
+        
+        const { rows } = await pool.query(updateQuery, [
+            employee_id,
+            client_id,
+            service_id,
             final_price,
             final_duration_minutes,
+            notes,
             starts_at,
             ends_at,
-            id,
+            status,
+            id
         ]);
 
-        if (!rows.length) return res.status(404).json({ error: "Turno no encontrado" });
-        res.json(rows[0]);
+        if (!rows.length) {
+            return res.status(404).json({ error: "Turno no encontrado" });
+        }
+        
+        // 3️⃣ Devolver el turno actualizado con información completa
+        const fullInfoQuery = `
+            SELECT a.*, e.name AS employee_name, e.color AS employee_color,
+                   s.name AS service_name, c.full_name AS client_name, c.phone AS client_phone
+            FROM appointments a
+            LEFT JOIN employees e ON a.employee_id = e.id
+            LEFT JOIN services s ON a.service_id = s.id
+            LEFT JOIN clients c ON a.client_id = c.id
+            WHERE a.id = $1
+        `;
+        
+        const { rows: fullInfo } = await pool.query(fullInfoQuery, [id]);
+        res.json(fullInfo[0]);
+        
     } catch (err) {
         console.error("Error al actualizar turno:", err);
         res.status(500).json({ error: "Error al actualizar turno" });
