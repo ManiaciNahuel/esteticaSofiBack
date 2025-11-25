@@ -139,4 +139,36 @@ router.delete("/:id", async (req, res) => {
     }
 });
 
+/**
+ * 🔍 Buscar turnos por cliente
+ * GET /api/appointments/search?client=nombre
+ */
+router.get("/search", async (req, res) => {
+    const { client } = req.query;
+
+    if (!client || client.trim().length < 2) {
+        return res.status(400).json({ error: "Debe proporcionar al menos 2 caracteres para buscar" });
+    }
+
+    try {
+        const query = `
+            SELECT a.*, e.name AS employee_name, e.color AS employee_color, 
+                   s.name AS service_name, c.full_name AS client_name, c.phone AS client_phone
+            FROM appointments a
+            LEFT JOIN employees e ON a.employee_id = e.id
+            LEFT JOIN services s ON a.service_id = s.id
+            LEFT JOIN clients c ON a.client_id = c.id
+            WHERE c.full_name ILIKE $1
+            ORDER BY a.starts_at DESC
+            LIMIT 50
+        `;
+        
+        const { rows } = await pool.query(query, [`%${client.trim()}%`]);
+        res.json(rows);
+    } catch (err) {
+        console.error("Error al buscar turnos por cliente:", err);
+        res.status(500).json({ error: "Error al buscar turnos por cliente" });
+    }
+});
+
 export default router;

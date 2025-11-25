@@ -6,6 +6,8 @@ import servicesRouter from './routes/services.js';
 import appointmentsRouter from './routes/appointments.js';
 import paymentsRouter from './routes/payments.js';
 import cashRouter from './routes/cash.js';
+import dailyNotesRouter from './routes/daily-notes.js';
+import clientsRouter from './routes/clients.js';
 
 const app = express();
 app.use(cors());
@@ -16,6 +18,8 @@ app.use('/api/services', servicesRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/cash', cashRouter);
+app.use('/api/daily-notes', dailyNotesRouter);
+app.use('/api/clients', clientsRouter);
 
 app.get('/', (req, res) => res.send('💅 Maniaci API OK'));
 
