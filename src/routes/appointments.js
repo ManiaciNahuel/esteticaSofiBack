@@ -109,13 +109,12 @@ router.patch("/:id", async (req, res) => {
         if (client && client.full_name) {
             const clientName = client.full_name;
             const clientPhone = client.phone || null;
-            
+
             const clientResult = await pool.query(
                 `INSERT INTO clients (full_name, phone)
                  VALUES ($1, $2)
                  ON CONFLICT (full_name) DO UPDATE SET 
-                    phone = EXCLUDED.phone,
-                    updated_at = CURRENT_TIMESTAMP
+                    phone = EXCLUDED.phone
                  RETURNING id`,
                 [clientName, clientPhone]
             );
@@ -138,7 +137,7 @@ router.patch("/:id", async (req, res) => {
             WHERE id = $10
             RETURNING *;
         `;
-        
+
         const { rows } = await pool.query(updateQuery, [
             employee_id,
             client_id,
@@ -155,7 +154,7 @@ router.patch("/:id", async (req, res) => {
         if (!rows.length) {
             return res.status(404).json({ error: "Turno no encontrado" });
         }
-        
+
         // 3️⃣ Devolver el turno actualizado con información completa
         const fullInfoQuery = `
             SELECT a.*, e.name AS employee_name, e.color AS employee_color,
@@ -166,10 +165,10 @@ router.patch("/:id", async (req, res) => {
             LEFT JOIN clients c ON a.client_id = c.id
             WHERE a.id = $1
         `;
-        
+
         const { rows: fullInfo } = await pool.query(fullInfoQuery, [id]);
         res.json(fullInfo[0]);
-        
+
     } catch (err) {
         console.error("Error al actualizar turno:", err);
         res.status(500).json({ error: "Error al actualizar turno" });
@@ -214,7 +213,7 @@ router.get("/search", async (req, res) => {
             ORDER BY a.starts_at DESC
             LIMIT 50
         `;
-        
+
         const { rows } = await pool.query(query, [`%${client.trim()}%`]);
         res.json(rows);
     } catch (err) {
