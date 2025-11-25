@@ -117,6 +117,7 @@ router.patch("/:id", async (req, res) => {
                     phone = EXCLUDED.phone
                  RETURNING id`,
                 [clientName, clientPhone]
+
             );
             client_id = clientResult.rows[0].id;
         }
