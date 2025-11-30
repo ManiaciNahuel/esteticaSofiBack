@@ -125,7 +125,7 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * �📄 Obtener pagos de un turno
+ * 📄 Obtener pagos de un turno
  * GET /api/payments/:appointmentId
  */
 router.get("/:appointmentId", async (req, res) => {
@@ -142,6 +142,69 @@ router.get("/:appointmentId", async (req, res) => {
     } catch (err) {
         console.error("Error al obtener pagos:", err);
         res.status(500).json({ error: "Error al obtener pagos" });
+    }
+});
+
+/**
+ * 🗑️ Eliminar un pago específico
+ * DELETE /api/payments/payment/:paymentId
+ */
+router.delete("/payment/:paymentId", async (req, res) => {
+    const { paymentId } = req.params;
+    
+    try {
+        // Primero obtenemos el appointment_id antes de eliminar
+        const { rows: paymentRows } = await pool.query(
+            `SELECT appointment_id FROM payments WHERE id = $1`,
+            [paymentId]
+        );
+        
+        if (paymentRows.length === 0) {
+            return res.status(404).json({ error: "Pago no encontrado" });
+        }
+        
+        const appointmentId = paymentRows[0].appointment_id;
+        
+        // Eliminar el pago
+        const { rowCount } = await pool.query(
+            `DELETE FROM payments WHERE id = $1`,
+            [paymentId]
+        );
+        
+        if (rowCount === 0) {
+            return res.status(404).json({ error: "Pago no encontrado" });
+        }
+        
+        // Verificar si el turno sigue estando completamente pagado
+        const { rows: sumRows } = await pool.query(
+            `SELECT SUM(amount)::numeric(12,2) as total FROM payments WHERE appointment_id = $1`,
+            [appointmentId]
+        );
+        const totalPagado = Number(sumRows[0]?.total || 0);
+
+        const { rows: turnoRows } = await pool.query(
+            `SELECT final_price FROM appointments WHERE id = $1`,
+            [appointmentId]
+        );
+        const precioFinal = Number(turnoRows[0]?.final_price || 0);
+
+        // Si ya no está completamente pagado, cambiar status a SCHEDULED
+        if (totalPagado < precioFinal) {
+            await pool.query(
+                `UPDATE appointments SET status = 'SCHEDULED', updated_at = NOW() WHERE id = $1`,
+                [appointmentId]
+            );
+        }
+        
+        res.json({ 
+            message: "Pago eliminado correctamente",
+            totalPagado,
+            precioFinal,
+            statusChanged: totalPagado < precioFinal ? 'SCHEDULED' : false
+        });
+    } catch (err) {
+        console.error("Error al eliminar pago:", err);
+        res.status(500).json({ error: "Error al eliminar pago" });
     }
 });
 
