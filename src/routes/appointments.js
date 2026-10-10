@@ -43,6 +43,7 @@ router.post("/", async (req, res) => {
         notes,
         starts_at,
         ends_at,
+        kind = "APPOINTMENT",
     } = req.body;
 
     const clientName = client?.full_name || null;
@@ -65,19 +66,20 @@ router.post("/", async (req, res) => {
         // 2️⃣ Crear el turno
         const insertQuery = `
       INSERT INTO appointments 
-      (employee_id, client_id, service_id, final_price, final_duration_minutes, notes, starts_at, ends_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      (employee_id, client_id, service_id, final_price, final_duration_minutes, notes, starts_at, ends_at, kind)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
         const values = [
             employee_id,
             client_id,
             service_id,
-            final_price,
-            final_duration_minutes,
+            kind === "LUNCH" ? 0 : (final_price === "" ? null : final_price),
+            final_duration_minutes === "" ? null : final_duration_minutes,
             notes,
             starts_at,
             ends_at,
+            kind,
         ];
         const { rows } = await pool.query(insertQuery, values);
         res.status(201).json(rows[0]);

@@ -11,3 +11,10 @@ export const pool = new Pool({
     database: process.env.PG_DATABASE,
     port: process.env.PG_PORT,
 });
+
+// Migración liviana: tipo de turno (APPOINTMENT | BREAK | LUNCH)
+export async function ensureSchema() {
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'APPOINTMENT'`);
+    // Break/almuerzo no tienen servicio
+    await pool.query(`ALTER TABLE appointments ALTER COLUMN service_id DROP NOT NULL`);
+}

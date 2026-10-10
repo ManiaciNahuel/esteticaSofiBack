@@ -6,12 +6,19 @@ const router = express.Router();
 /**
  * 📊 Caja diaria
  * GET /api/cash/daily?date=2025-10-27
+ * GET /api/cash/daily?from=2025-10-01&to=2025-10-31
  */
 router.get("/daily", async (req, res) => {
   const { date } = req.query;
+  const from = req.query.from || date;
+  const to = req.query.to || from;
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-  if (!date) {
-    return res.status(400).json({ error: "Debe especificar una fecha (YYYY-MM-DD)" });
+  if (!from) {
+    return res.status(400).json({ error: "Debe especificar una fecha (YYYY-MM-DD) o un rango from/to" });
+  }
+  if (!isoDate.test(from) || !isoDate.test(to) || from > to) {
+    return res.status(400).json({ error: "Rango de fechas inválido" });
   }
 
   try {
@@ -25,11 +32,11 @@ router.get("/daily", async (req, res) => {
       FROM payments p
       JOIN appointments a ON a.id = p.appointment_id
       JOIN employees e ON e.id = a.employee_id
-      WHERE a.starts_at::date = $1::date
+      WHERE a.starts_at::date BETWEEN $1::date AND $2::date
       GROUP BY e.id, e.name, p.method
       ORDER BY e.name, p.method;
     `;
-    const { rows } = await pool.query(query, [date]);
+    const { rows } = await pool.query(query, [from, to]);
 
     // Totales por empleada (split 50/50)
     const resumenQuery = `
@@ -42,11 +49,11 @@ router.get("/daily", async (req, res) => {
       FROM payments p
       JOIN appointments a ON a.id = p.appointment_id
       JOIN employees e ON e.id = a.employee_id
-      WHERE a.starts_at::date = $1::date
+      WHERE a.starts_at::date BETWEEN $1::date AND $2::date
       GROUP BY e.id, e.name
       ORDER BY e.name;
     `;
-    const { rows: resumen } = await pool.query(resumenQuery, [date]);
+    const { rows: resumen } = await pool.query(resumenQuery, [from, to]);
 
     // Estructurar respuesta
     const agrupado = {};
@@ -58,7 +65,9 @@ router.get("/daily", async (req, res) => {
     }
 
     res.json({
-      fecha: date,
+      fecha: from,
+      desde: from,
+      hasta: to,
       totales_por_metodo: rows,
       resumen_por_empleada: resumen,
       agrupado_por_empleada: agrupado,
