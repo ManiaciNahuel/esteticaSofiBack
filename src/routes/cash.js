@@ -25,8 +25,7 @@ router.get("/daily", async (req, res) => {
       FROM payments p
       JOIN appointments a ON a.id = p.appointment_id
       JOIN employees e ON e.id = a.employee_id
-      WHERE a.status = 'DONE'
-        AND a.starts_at::date = $1::date
+      WHERE a.starts_at::date = $1::date
       GROUP BY e.id, e.name, p.method
       ORDER BY e.name, p.method;
     `;
@@ -43,8 +42,7 @@ router.get("/daily", async (req, res) => {
       FROM payments p
       JOIN appointments a ON a.id = p.appointment_id
       JOIN employees e ON e.id = a.employee_id
-      WHERE a.status = 'DONE'
-        AND a.starts_at::date = $1::date
+      WHERE a.starts_at::date = $1::date
       GROUP BY e.id, e.name
       ORDER BY e.name;
     `;

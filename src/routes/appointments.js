@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../db/index.js";
+import { syncAppointmentStatus } from "../utils/appointmentStatus.js";
 const router = express.Router();
 
 /**
@@ -154,6 +155,11 @@ router.patch("/:id", async (req, res) => {
 
         if (!rows.length) {
             return res.status(404).json({ error: "Turno no encontrado" });
+        }
+
+        // Si no se fuerza un estado a mano, recalcularlo según precio vs. pagos
+        if (!status) {
+            await syncAppointmentStatus(id);
         }
 
         // 3️⃣ Devolver el turno actualizado con información completa

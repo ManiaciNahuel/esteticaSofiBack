@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../db/index.js";
+import { syncAppointmentStatus } from "../utils/appointmentStatus.js";
 
 const router = express.Router();
 
@@ -38,25 +39,7 @@ router.post("/:appointmentId", async (req, res) => {
             results.push(rows[0]);
         }
 
-        // verificar si ya se completó el pago total
-        const { rows: sumRows } = await pool.query(
-            `SELECT SUM(amount)::numeric(12,2) as total FROM payments WHERE appointment_id = $1`,
-            [appointmentId]
-        );
-        const totalPagado = Number(sumRows[0]?.total || 0);
-
-        const { rows: turnoRows } = await pool.query(
-            `SELECT final_price FROM appointments WHERE id = $1`,
-            [appointmentId]
-        );
-        const precioFinal = Number(turnoRows[0]?.final_price || 0);
-
-        if (precioFinal > 0 && totalPagado >= precioFinal) {
-            await pool.query(
-                `UPDATE appointments SET status = 'DONE', updated_at = NOW() WHERE id = $1`,
-                [appointmentId]
-            );
-        }
+        const { totalPagado } = await syncAppointmentStatus(appointmentId);
 
         res.status(201).json({ pagos: results, totalPagado });
     } catch (err) {
@@ -97,25 +80,7 @@ router.post("/", async (req, res) => {
             results.push(rows[0]);
         }
 
-        // Verificar si ya se completó el pago total
-        const { rows: sumRows } = await pool.query(
-            `SELECT SUM(amount)::numeric(12,2) as total FROM payments WHERE appointment_id = $1`,
-            [appointment_id]
-        );
-        const totalPagado = Number(sumRows[0]?.total || 0);
-
-        const { rows: turnoRows } = await pool.query(
-            `SELECT final_price FROM appointments WHERE id = $1`,
-            [appointment_id]
-        );
-        const precioFinal = Number(turnoRows[0]?.final_price || 0);
-
-        if (precioFinal > 0 && totalPagado >= precioFinal) {
-            await pool.query(
-                `UPDATE appointments SET status = 'DONE', updated_at = NOW() WHERE id = $1`,
-                [appointment_id]
-            );
-        }
+        const { totalPagado } = await syncAppointmentStatus(appointment_id);
 
         res.status(201).json({ pagos: results, totalPagado });
     } catch (err) {
@@ -175,32 +140,14 @@ router.delete("/payment/:paymentId", async (req, res) => {
             return res.status(404).json({ error: "Pago no encontrado" });
         }
         
-        // Verificar si el turno sigue estando completamente pagado
-        const { rows: sumRows } = await pool.query(
-            `SELECT SUM(amount)::numeric(12,2) as total FROM payments WHERE appointment_id = $1`,
-            [appointmentId]
-        );
-        const totalPagado = Number(sumRows[0]?.total || 0);
+        // Recalcular el estado del turno tras borrar el pago
+        const { totalPagado, precioFinal, statusChanged } = await syncAppointmentStatus(appointmentId);
 
-        const { rows: turnoRows } = await pool.query(
-            `SELECT final_price FROM appointments WHERE id = $1`,
-            [appointmentId]
-        );
-        const precioFinal = Number(turnoRows[0]?.final_price || 0);
-
-        // Si ya no está completamente pagado, cambiar status a SCHEDULED
-        if (totalPagado < precioFinal) {
-            await pool.query(
-                `UPDATE appointments SET status = 'SCHEDULED', updated_at = NOW() WHERE id = $1`,
-                [appointmentId]
-            );
-        }
-        
-        res.json({ 
+        res.json({
             message: "Pago eliminado correctamente",
             totalPagado,
             precioFinal,
-            statusChanged: totalPagado < precioFinal ? 'SCHEDULED' : false
+            statusChanged
         });
     } catch (err) {
         console.error("Error al eliminar pago:", err);
